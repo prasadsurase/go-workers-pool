@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"runtime"
+	"sync"
+	"time"
 )
 
 func main() {
@@ -23,16 +25,11 @@ func main() {
 	}
 
 	wp := WorkerPool{
-		// concurrency: 3,
-		concurrency: runtime.NumCPU(),
-		tasksChan:   make(chan Task, 1), // buffered channel size should never be more than 1.
-		doneChan:    make(chan bool),
+		concurrency: 3,
+		// concurrency: runtime.NumCPU(),
+		tasksChan: make(chan Task, 1), // buffered channel size should never be more than 1.
+		wg:        sync.WaitGroup{},
 	}
-
-	go func() {
-		fmt.Printf("Starting workers...\n")
-		wp.Run()
-	}()
 
 	go func() {
 		fmt.Printf("Loading tasks...\n")
@@ -40,14 +37,18 @@ func main() {
 		// This can be reading a large file or reading data from a queue
 		for i := 0; i < len(tasks); i++ {
 			fmt.Printf("Loading task %d in tasks channel\n", i+1)
+			wp.wg.Add(1)
 			wp.tasksChan <- tasks[i]
 		}
 		close(wp.tasksChan)
-		wp.doneChan <- true
 	}()
 
-	// wait until done channel has some data.
-	<-wp.doneChan
+	go func() {
+		fmt.Printf("Starting workers...\n")
+		wp.Run()
+	}()
 
+	time.Sleep(5 * time.Millisecond) //without this statement, program would exit as go routines cannot populate the tasks
+	wp.wg.Wait()
 	fmt.Println("Main finished as no tasks")
 }
